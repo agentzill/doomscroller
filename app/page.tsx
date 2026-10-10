@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { IG_COOKIE, fetchReels, parseSession, type Reel } from "../lib/instagram";
+import { IG_COOKIE, fetchReels, parseSession, type MediaResult } from "../lib/instagram";
 
 export const dynamic = "force-dynamic";
 
@@ -7,11 +7,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   const { error } = await searchParams;
   const session = parseSession((await cookies()).get(IG_COOKIE)?.value);
 
-  let reels: Reel[] = [];
+  let result: MediaResult = { reels: [], totalPosts: 0, byType: {} };
   let fetchError: string | null = null;
   if (session) {
     try {
-      reels = await fetchReels(session.token);
+      result = await fetchReels(session.token);
     } catch (e) {
       fetchError = (e as Error).message;
     }
@@ -49,11 +49,21 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
         >
           Log in with Instagram
         </a>
-      ) : reels.length === 0 && !fetchError ? (
-        <p style={{ color: "#b0b0b0" }}>No Reels found on this account yet.</p>
+      ) : result.reels.length === 0 && !fetchError ? (
+        <div style={{ color: "#b0b0b0", fontSize: 14, lineHeight: 1.5 }}>
+          <p>No Reels found on this account.</p>
+          <p style={{ fontSize: 12, color: "#808080" }}>
+            Instagram returned {result.totalPosts} published post{result.totalPosts === 1 ? "" : "s"}
+            {result.totalPosts > 0 &&
+              ` (${Object.entries(result.byType)
+                .map(([t, n]) => `${n} ${t.toLowerCase()}`)
+                .join(", ")})`}
+            . Only Reels this account has published appear here, not the Reels feed you scroll.
+          </p>
+        </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
-          {reels.map((r) => (
+          {result.reels.map((r) => (
             <article key={r.id} style={{ background: "#1e1e1e", borderRadius: 12, overflow: "hidden" }}>
               {r.thumbnail_url && (
                 // eslint-disable-next-line @next/next/no-img-element

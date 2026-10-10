@@ -39,14 +39,45 @@ export function encodeSession(s: Session): string {
   return Buffer.from(JSON.stringify(s), "utf8").toString("base64url");
 }
 
-export async function fetchReels(token: string): Promise<Reel[]> {
+export type MediaResult = {
+  reels: Reel[];
+  /** Every post Instagram returned for this account (any type), for diagnostics. */
+  totalPosts: number;
+  /** Count of posts by media_product_type (FEED, REELS, STORY...). */
+  byType: Record<string, number>;
+};
+
+/**
+ * Fetches the logged-in account's own published media (Instagram's API cannot
+ * return the home/Reels feed a user scrolls, only content the account posted)
+ * and keeps the Reels. Follows pagination up to MAX_PAGES.
+ */
+export async function fetchReels(token: string): Promise<MediaResult> {
+  const MAX_PAGES = 4;
   const fields =
     "id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp";
-  const url = `https://graph.instagram.com/me/media?fields=${fields}&limit=50&access_token=${encodeURIComponent(token)}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`Instagram media fetch failed (${res.status}): ${await res.text()}`);
+  let url: string | undefined =
+    `https://graph.instagram.com/me/media?fields=${fields}&limit=50&access_token=${encodeURIComponent(token)}`;
+
+  const all: Reel[] = [];
+  for (let page = 0; url && page < MAX_PAGES; page++) {
+    const res: Response = await fetch(url, { cache: "no-store" });
+    if (!res.ok) {
+      throw new Error(`Instagram media fetch failed (${res.status}): ${await res.text()}`);
+    }
+    const json = (await res.json()) as { data: Reel[]; paging?: { next?: string } };
+    all.push(...json.data);
+    url = json.paging?.next;
   }
-  const json = (await res.json()) as { data: Reel[] };
-  return json.data.filter((m) => m.media_product_type === "REELS");
+
+  const byType: Record<string, number> = {};
+  for (const m of all) {
+    const t = m.media_product_type ?? m.media_type ?? "UNKNOWN";
+    byType[t] = (byType[t] ?? 0) + 1;
+  }
+  return {
+    reels: all.filter((m) => m.media_product_type === "REELS"),
+    totalPosts: all.length,
+    byType,
+  };
 }

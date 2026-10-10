@@ -1,6 +1,14 @@
 node_modules
 .next
-.env
-.env.local
-next-env.d.ts
+.vercel
+.DS_Store
 *.tsbuildinfo
+next-env.d.ts
+
+# Never commit real env files; only the blank template is tracked
+.env*
+!.env.example
+
+# Keys and certificates
+*.pem
+*.key
